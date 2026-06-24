@@ -1,1 +1,825 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10131f" />
+    <title>Invisible Turnstile Custom Captcha</title>
 
+    <link rel="preconnect" href="https://challenges.cloudflare.com" />
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+      async
+      defer
+    ></script>
+
+    <style>
+      :root {
+        --bg: #0b1020;
+        --card: rgba(255, 255, 255, 0.105);
+        --card-strong: rgba(255, 255, 255, 0.16);
+        --text: #f8fbff;
+        --muted: rgba(248, 251, 255, 0.68);
+        --line: rgba(255, 255, 255, 0.18);
+        --good: #7dffbe;
+        --bad: #ff7b98;
+        --focus: #a98bff;
+        --gold: #ffd66e;
+        --shadow: 0 28px 90px rgba(0, 0, 0, 0.52);
+        --radius: 30px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 15% 20%, rgba(148, 91, 255, 0.34), transparent 31rem),
+          radial-gradient(circle at 82% 12%, rgba(36, 201, 255, 0.28), transparent 28rem),
+          radial-gradient(circle at 50% 100%, rgba(125, 255, 190, 0.18), transparent 30rem),
+          linear-gradient(135deg, #090d1a 0%, #11182e 48%, #090d1a 100%);
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.034) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.034) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: linear-gradient(to bottom, black, transparent 72%);
+      }
+
+      .page {
+        position: relative;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px 18px;
+      }
+
+      .orb {
+        position: fixed;
+        border-radius: 999px;
+        filter: blur(8px);
+        opacity: 0.72;
+        pointer-events: none;
+        animation: float 9s ease-in-out infinite;
+      }
+
+      .orb.one {
+        width: 190px;
+        height: 190px;
+        left: 8%;
+        top: 14%;
+        background: rgba(169, 139, 255, 0.27);
+      }
+
+      .orb.two {
+        width: 130px;
+        height: 130px;
+        right: 12%;
+        bottom: 13%;
+        background: rgba(125, 255, 190, 0.2);
+        animation-delay: -3s;
+      }
+
+      .orb.three {
+        width: 90px;
+        height: 90px;
+        right: 18%;
+        top: 17%;
+        background: rgba(255, 214, 110, 0.18);
+        animation-delay: -5.5s;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+        50% {
+          transform: translate3d(10px, -18px, 0) scale(1.06);
+        }
+      }
+
+      .shell {
+        width: min(100%, 440px);
+        perspective: 1200px;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.055)),
+          var(--card);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(28px);
+        transform-style: preserve-3d;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(120deg, transparent 0 18%, rgba(255, 255, 255, 0.2) 26%, transparent 38%),
+          radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.13), transparent 18rem);
+        opacity: 0.7;
+      }
+
+      .card-inner {
+        position: relative;
+        padding: 26px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 28px;
+      }
+
+      .brand-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .logo {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        border-radius: 18px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08)),
+          linear-gradient(135deg, rgba(169, 139, 255, 0.52), rgba(125, 255, 190, 0.28));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+        font-size: 23px;
+      }
+
+      .eyebrow {
+        margin: 0 0 3px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(26px, 5vw, 34px);
+        line-height: 1.02;
+        letter-spacing: -0.055em;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 11px;
+        border-radius: 999px;
+        background: rgba(125, 255, 190, 0.12);
+        color: var(--good);
+        border: 1px solid rgba(125, 255, 190, 0.22);
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .badge-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--good);
+        box-shadow: 0 0 18px var(--good);
+      }
+
+      .intro {
+        margin: -8px 0 20px;
+        color: var(--muted);
+        font-size: 14.5px;
+        line-height: 1.65;
+      }
+
+      .panel {
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 24px;
+        background: rgba(0, 0, 0, 0.18);
+        padding: 16px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+
+      .prompt {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+
+      .mini {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .options {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+
+      .tile {
+        position: relative;
+        min-height: 90px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 20px;
+        background:
+          radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.18), transparent 50%),
+          rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        cursor: pointer;
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          background 180ms ease,
+          box-shadow 180ms ease;
+        isolation: isolate;
+      }
+
+      .tile:hover,
+      .tile:focus-visible {
+        transform: translateY(-3px);
+        outline: none;
+        border-color: rgba(169, 139, 255, 0.58);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+      }
+
+      .tile.selected {
+        border-color: rgba(125, 255, 190, 0.7);
+        background:
+          radial-gradient(circle at 50% 20%, rgba(125, 255, 190, 0.24), transparent 55%),
+          rgba(125, 255, 190, 0.1);
+      }
+
+      .tile.wrong {
+        animation: shake 360ms ease;
+        border-color: rgba(255, 123, 152, 0.7);
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-5px);
+        }
+        50% {
+          transform: translateX(5px);
+        }
+        75% {
+          transform: translateX(-3px);
+        }
+      }
+
+      .tile-icon {
+        display: block;
+        font-size: 34px;
+        margin-bottom: 8px;
+        filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.34));
+      }
+
+      .tile-label {
+        display: block;
+        color: rgba(248, 251, 255, 0.72);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .progress-wrap {
+        margin: 16px 0 0;
+      }
+
+      .progress-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        margin-bottom: 9px;
+      }
+
+      .progress {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+      }
+
+      .bar {
+        width: 38%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--focus), var(--good));
+        transition: width 360ms ease;
+        box-shadow: 0 0 28px rgba(125, 255, 190, 0.38);
+      }
+
+      .actions {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .primary {
+        border: 0;
+        min-height: 54px;
+        border-radius: 18px;
+        color: #07111b;
+        background: linear-gradient(135deg, #ffffff, #b9ffe0 48%, #bda8ff);
+        box-shadow: 0 18px 36px rgba(125, 255, 190, 0.18);
+        font-weight: 950;
+        letter-spacing: -0.01em;
+        cursor: pointer;
+        transition:
+          transform 180ms ease,
+          opacity 180ms ease,
+          filter 180ms ease;
+      }
+
+      .primary:hover:not(:disabled),
+      .primary:focus-visible:not(:disabled) {
+        transform: translateY(-2px);
+        filter: brightness(1.03);
+        outline: none;
+      }
+
+      .primary:disabled {
+        cursor: not-allowed;
+        opacity: 0.54;
+        box-shadow: none;
+      }
+
+      .ghost {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        min-height: 44px;
+        border-radius: 16px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.07);
+        cursor: pointer;
+        font-weight: 850;
+      }
+
+      .status {
+        min-height: 23px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .status.good {
+        color: var(--good);
+      }
+
+      .status.bad {
+        color: var(--bad);
+      }
+
+      .turnstile-anchor {
+        min-height: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+
+      .hello {
+        display: none;
+        text-align: center;
+        padding: 28px 8px 6px;
+      }
+
+      .success-mark {
+        width: 92px;
+        height: 92px;
+        display: grid;
+        place-items: center;
+        margin: 0 auto 18px;
+        border-radius: 32px;
+        background:
+          radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.36), transparent 55%),
+          linear-gradient(135deg, rgba(125, 255, 190, 0.95), rgba(169, 139, 255, 0.86));
+        color: #07111b;
+        font-size: 46px;
+        box-shadow: 0 26px 54px rgba(0, 0, 0, 0.28);
+      }
+
+      .hello h2 {
+        margin: 0 0 8px;
+        font-size: clamp(30px, 7vw, 46px);
+        letter-spacing: -0.07em;
+      }
+
+      .hello p {
+        margin: 0 auto 22px;
+        max-width: 30ch;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .meta {
+        display: grid;
+        gap: 8px;
+        text-align: left;
+        padding: 13px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: rgba(248, 251, 255, 0.72);
+        font-size: 12px;
+        word-break: break-word;
+      }
+
+      body.verified .verify-view {
+        display: none;
+      }
+
+      body.verified .hello {
+        display: block;
+        animation: pop 420ms cubic-bezier(0.2, 0.9, 0.2, 1.2);
+      }
+
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(12px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      @media (max-width: 420px) {
+        .card-inner {
+          padding: 21px;
+        }
+
+        .brand {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .badge {
+          align-self: flex-start;
+        }
+
+        .options {
+          gap: 8px;
+        }
+
+        .tile {
+          min-height: 82px;
+          border-radius: 18px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="orb one"></div>
+      <div class="orb two"></div>
+      <div class="orb three"></div>
+
+      <section class="shell" aria-label="Human verification">
+        <div class="card">
+          <div class="card-inner">
+            <div class="verify-view">
+              <header class="brand">
+                <div class="brand-left">
+                  <div class="logo" aria-hidden="true">✦</div>
+                  <div>
+                    <p class="eyebrow">Secure Gateway</p>
+                    <h1>Human Check</h1>
+                  </div>
+                </div>
+
+                <div class="badge" title="Cloudflare Turnstile runs invisibly after this UI step.">
+                  <span class="badge-dot"></span>
+                  Protected
+                </div>
+              </header>
+
+              <p class="intro">
+                Solve the tiny visual check, then Cloudflare Turnstile will verify your browser quietly in the background.
+              </p>
+
+              <section class="panel" aria-live="polite">
+                <div class="panel-head">
+                  <p class="prompt" id="promptText">Loading challenge…</p>
+                  <span class="mini" id="roundText">Step 1/2</span>
+                </div>
+
+                <div class="options" id="options" aria-label="Captcha choices"></div>
+
+                <div class="progress-wrap" aria-hidden="true">
+                  <div class="progress-top">
+                    <span id="progressLabel">Choose the correct icon</span>
+                    <span id="progressPercent">38%</span>
+                  </div>
+                  <div class="progress">
+                    <div class="bar" id="progressBar"></div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="actions">
+                <button class="primary" id="verifyBtn" type="button" disabled>
+                  Verify & Enter
+                </button>
+                <button class="ghost" id="refreshBtn" type="button">
+                  New challenge
+                </button>
+              </div>
+
+              <div class="status" id="statusText">Waiting for your answer.</div>
+              <div class="turnstile-anchor" id="turnstile-container" aria-hidden="true"></div>
+            </div>
+
+            <section class="hello" aria-live="polite">
+              <div class="success-mark" aria-hidden="true">✓</div>
+              <h2>Hello!</h2>
+              <p>You passed the custom captcha UI and the invisible Turnstile verification.</p>
+              <div class="meta" id="successMeta"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // Sitekey is public by design. Keep the SECRET KEY only in Vercel env vars.
+      // For local testing, this official Cloudflare test sitekey always passes.
+      // Replace this with your real Turnstile sitekey before production.
+      const TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+      const TURNSTILE_ACTION = "hello_access";
+
+      const icons = [
+        { id: "shield", label: "Shield", emoji: "🛡️" },
+        { id: "spark", label: "Spark", emoji: "✨" },
+        { id: "moon", label: "Moon", emoji: "🌙" },
+        { id: "bolt", label: "Bolt", emoji: "⚡" },
+        { id: "gem", label: "Gem", emoji: "💎" },
+        { id: "star", label: "Star", emoji: "⭐" },
+        { id: "fire", label: "Fire", emoji: "🔥" },
+        { id: "leaf", label: "Leaf", emoji: "🍃" },
+        { id: "key", label: "Key", emoji: "🗝️" }
+      ];
+
+      const $ = (selector) => document.querySelector(selector);
+
+      const promptText = $("#promptText");
+      const roundText = $("#roundText");
+      const optionsEl = $("#options");
+      const verifyBtn = $("#verifyBtn");
+      const refreshBtn = $("#refreshBtn");
+      const statusText = $("#statusText");
+      const progressBar = $("#progressBar");
+      const progressLabel = $("#progressLabel");
+      const progressPercent = $("#progressPercent");
+      const successMeta = $("#successMeta");
+
+      let widgetId = null;
+      let answerId = null;
+      let customPassed = false;
+      let verifying = false;
+
+      function shuffle(array) {
+        return [...array].sort(() => Math.random() - 0.5);
+      }
+
+      function setStatus(message, type = "") {
+        statusText.textContent = message;
+        statusText.className = `status ${type}`.trim();
+      }
+
+      function setProgress(percent, label) {
+        progressBar.style.width = `${percent}%`;
+        progressPercent.textContent = `${percent}%`;
+        progressLabel.textContent = label;
+      }
+
+      function createChallenge() {
+        customPassed = false;
+        verifying = false;
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = "Verify & Enter";
+        roundText.textContent = "Step 1/2";
+        setProgress(38, "Choose the correct icon");
+        setStatus("Waiting for your answer.");
+
+        const choices = shuffle(icons).slice(0, 3);
+        const target = choices[Math.floor(Math.random() * choices.length)];
+        answerId = target.id;
+
+        promptText.textContent = `Pick the ${target.label.toLowerCase()}`;
+        optionsEl.innerHTML = "";
+
+        for (const choice of shuffle(choices)) {
+          const button = document.createElement("button");
+          button.className = "tile";
+          button.type = "button";
+          button.dataset.id = choice.id;
+          button.setAttribute("aria-label", choice.label);
+          button.innerHTML = `
+            <span class="tile-icon">${choice.emoji}</span>
+            <span class="tile-label">${choice.label}</span>
+          `;
+          button.addEventListener("click", () => handleTileClick(button, choice.id));
+          optionsEl.appendChild(button);
+        }
+
+        if (window.turnstile && widgetId !== null) {
+          window.turnstile.reset(widgetId);
+        }
+      }
+
+      function handleTileClick(button, id) {
+        if (verifying) return;
+
+        document.querySelectorAll(".tile").forEach((tile) => {
+          tile.classList.remove("selected", "wrong");
+        });
+
+        if (id !== answerId) {
+          button.classList.add("wrong");
+          verifyBtn.disabled = true;
+          customPassed = false;
+          setProgress(20, "Try one more time");
+          setStatus("Not this one. New challenge generated.", "bad");
+          window.setTimeout(createChallenge, 650);
+          return;
+        }
+
+        button.classList.add("selected");
+        customPassed = true;
+        verifyBtn.disabled = false;
+        roundText.textContent = "Step 2/2";
+        setProgress(72, "Ready for invisible verification");
+        setStatus("Nice. Now run the secure browser check.", "good");
+      }
+
+      function renderTurnstile() {
+        if (!window.turnstile || widgetId !== null) return;
+
+        window.turnstile.ready(() => {
+          widgetId = window.turnstile.render("#turnstile-container", {
+            sitekey: TURNSTILE_SITE_KEY,
+            action: TURNSTILE_ACTION,
+            execution: "execute",
+            appearance: "execute",
+            theme: "dark",
+            callback: verifyWithServer,
+            "error-callback": () => {
+              verifying = false;
+              verifyBtn.disabled = !customPassed;
+              verifyBtn.textContent = "Try again";
+              setProgress(72, "Turnstile needs a retry");
+              setStatus("Cloudflare check failed to start. Please try again.", "bad");
+            },
+            "expired-callback": () => {
+              verifying = false;
+              verifyBtn.disabled = !customPassed;
+              verifyBtn.textContent = "Verify again";
+              setProgress(72, "Token expired");
+              setStatus("Verification expired. Please press the button again.", "bad");
+            }
+          });
+        });
+      }
+
+      async function startVerification() {
+        if (!customPassed || verifying) return;
+
+        if (!window.turnstile || widgetId === null) {
+          setStatus("Turnstile is still loading. Please try again in a moment.", "bad");
+          return;
+        }
+
+        verifying = true;
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = "Checking…";
+        setProgress(88, "Invisible browser check running");
+        setStatus("Running invisible Turnstile verification…");
+
+        window.turnstile.execute(widgetId);
+      }
+
+      async function verifyWithServer(token) {
+        try {
+          const response = await fetch("/api/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              token,
+              customPassed,
+              action: TURNSTILE_ACTION
+            })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || "Verification rejected");
+          }
+
+          setProgress(100, "Verified");
+          setStatus("Verified. Welcome in!", "good");
+          showHello(result);
+        } catch (error) {
+          verifying = false;
+          verifyBtn.disabled = !customPassed;
+          verifyBtn.textContent = "Try again";
+          setProgress(72, "Verification failed");
+          setStatus(error.message || "Verification failed.", "bad");
+
+          if (window.turnstile && widgetId !== null) {
+            window.turnstile.reset(widgetId);
+          }
+        }
+      }
+
+      function showHello(result) {
+        const rows = [
+          ["Status", "Verified"],
+          ["Host", result.hostname || "local/test"],
+          ["Action", result.action || TURNSTILE_ACTION],
+          ["Checked at", new Date().toLocaleString()]
+        ];
+
+        successMeta.innerHTML = rows
+          .map(([label, value]) => `<div><strong>${label}:</strong> ${value}</div>`)
+          .join("");
+
+        document.body.classList.add("verified");
+      }
+
+      verifyBtn.addEventListener("click", startVerification);
+      refreshBtn.addEventListener("click", createChallenge);
+
+      createChallenge();
+
+      const waitForTurnstile = window.setInterval(() => {
+        if (window.turnstile) {
+          window.clearInterval(waitForTurnstile);
+          renderTurnstile();
+        }
+      }, 60);
+    </script>
+  </body>
+</html>
